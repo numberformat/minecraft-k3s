@@ -385,18 +385,20 @@ Run:
 ./uninstall.sh
 ```
 
-The script prints available instances with port, namespace, subdomain, and data path, then prompts for a selection and confirmation.
+The script prints instances that still have live Kubernetes resources or a retained PV. Deleted instances whose PVC and PV are both gone are removed from the local `instances/` directory and no longer appear in the menu.
 
-It deletes:
+The menu status values are:
 
-- Deployment
-- Service
+- `installed`: Deployment, Service, or PVC still exists
+- `deleted-pv-retained`: workload and PVC are gone, but the retained PV object still exists
+
+For the selected instance, the script asks before deleting:
+
+- Deployment and Service
 - PVC
+- PV
 
-It does not delete:
-
-- host data at `/data/minecraft/<instance>`
-- the retained PV data on disk
+Deleting the PV removes only the Kubernetes PV object. The script then asks separately whether to delete the hostPath files under `/data/minecraft/<instance>`. Answering yes permanently removes the world files from the storage node by running a temporary cleanup pod pinned to a Minecraft node. The script refuses to delete paths outside `/data/minecraft/*`.
 
 ## Useful Checks
 
