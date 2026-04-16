@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minecraft-${INSTANCE_NAME}-pv
+  labels:
+    app.kubernetes.io/name: minecraft-bedrock
+    app.kubernetes.io/instance: ${INSTANCE_NAME}
+spec:
+  capacity:
+    storage: ${STORAGE}
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: minecraft-${INSTANCE_NAME}
+  hostPath:
+    path: ${DATA_PATH}
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: "${NODE_LABEL}"
+              operator: In
+              values:
+                - "true"

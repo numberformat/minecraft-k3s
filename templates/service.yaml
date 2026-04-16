@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft-${INSTANCE_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: minecraft-bedrock
+    app.kubernetes.io/instance: ${INSTANCE_NAME}
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: minecraft-bedrock
+    app.kubernetes.io/instance: ${INSTANCE_NAME}
+  ports:
+    - name: bedrock
+      port: ${PORT}
+      targetPort: 19132
+      protocol: UDP

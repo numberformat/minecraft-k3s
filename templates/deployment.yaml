@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft-${INSTANCE_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: minecraft-bedrock
+    app.kubernetes.io/instance: ${INSTANCE_NAME}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minecraft-bedrock
+      app.kubernetes.io/instance: ${INSTANCE_NAME}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minecraft-bedrock
+        app.kubernetes.io/instance: ${INSTANCE_NAME}
+    spec:
+      nodeSelector:
+        "${NODE_LABEL}": "true"
+      containers:
+        - name: minecraft
+          image: itzg/minecraft-bedrock-server:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: EULA
+              value: "TRUE"
+            - name: SERVER_NAME
+              value: "${SERVER_NAME}"
+            - name: GAMEMODE
+              value: "${GAMEMODE}"
+            - name: DIFFICULTY
+              value: "${DIFFICULTY}"
+            - name: DEFAULT_PLAYER_PERMISSION_LEVEL
+              value: "${DEFAULT_PLAYER_PERMISSION_LEVEL}"
+            - name: LEVEL_NAME
+              value: "${LEVEL_NAME}"
+            - name: LEVEL_SEED
+              value: "${LEVEL_SEED}"
+            - name: LEVEL_TYPE
+              value: "${LEVEL_TYPE}"
+            - name: ALLOW_CHEATS
+              value: "${ALLOW_CHEATS}"
+            - name: MAX_PLAYERS
+              value: "${MAX_PLAYERS}"
+            - name: PLAYER_IDLE_TIMEOUT
+              value: "${PLAYER_IDLE_TIMEOUT}"
+            - name: TEXTUREPACK_REQUIRED
+              value: "${TEXTUREPACK_REQUIRED}"
+            - name: ONLINE_MODE
+              value: "${ONLINE_MODE}"
+            - name: WHITE_LIST
+              value: "${WHITE_LIST}"
+            - name: VIEW_DISTANCE
+              value: "${VIEW_DISTANCE}"
+            - name: TICK_DISTANCE
+              value: "${TICK_DISTANCE}"
+            - name: MAX_THREADS
+              value: "${MAX_THREADS}"
+          ports:
+            - name: bedrock
+              containerPort: 19132
+              protocol: UDP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command:
+                - mc-monitor
+                - status-bedrock
+                - --host
+                - 127.0.0.1
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command:
+                - mc-monitor
+                - status-bedrock
+                - --host
+                - 127.0.0.1
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 4
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minecraft-${INSTANCE_NAME}-data
