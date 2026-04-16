@@ -67,6 +67,8 @@ install.sh            Install or update one instance
 uninstall.sh          Remove one instance's Kubernetes resources
 import_world.sh       Import server data or one world into an instance
 export_world.sh       Export one instance's /data as a tar.gz file
+export_allowlist.sh   Export /data/allowlist.json from an instance
+import_allowlist.sh   Validate and import /data/allowlist.json into an instance
 backup.sh             Back up all instances to MinIO
 templates/            Kubernetes templates rendered with envsubst
 instances/            Per-instance values.env files
@@ -224,6 +226,60 @@ For public access, configure router port forwards with UDP, not TCP:
 WAN UDP 19132 -> k3s node/VIP UDP 19132
 WAN UDP 19133 -> k3s node/VIP UDP 19133
 ```
+
+
+## Allowlist Management
+
+Minecraft Bedrock uses `allowlist.json` to restrict which players can join when the server allowlist is enabled. Older Bedrock settings and tools may still use the word `whitelist`; in this context, whitelist and allowlist mean the same access-control concept. `allowlist` is the newer term, while `white-list` is still the server.properties setting name used by Bedrock.
+
+Enable allowlist during setup by answering `true` here:
+
+```text
+Enable allowlist/whitelist: true or false [false]: true
+```
+
+That writes this instance value:
+
+```bash
+WHITE_LIST=true
+```
+
+To export the current allowlist:
+
+```bash
+./export_allowlist.sh <instance> <output-json>
+```
+
+Example:
+
+```bash
+./export_allowlist.sh test ./allowlist-test.json
+```
+
+Edit the JSON locally. A typical file looks like:
+
+```json
+[
+  {
+    "name": "PlayerName",
+    "ignoresPlayerLimit": false
+  }
+]
+```
+
+Then import it back into the instance:
+
+```bash
+./import_allowlist.sh <instance> <source-json>
+```
+
+Example:
+
+```bash
+./import_allowlist.sh test ./allowlist-test.json
+```
+
+`import_allowlist.sh` validates the JSON, scales the server down, replaces `/data/allowlist.json`, and restores the previous replica count.
 
 ## Import Worlds
 
