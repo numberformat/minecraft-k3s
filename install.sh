@@ -2,7 +2,7 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATES_DIR="${ROOT_DIR}/templates"
+K8S_DIR="${ROOT_DIR}/k8s"
 INSTANCES_DIR="${ROOT_DIR}/instances"
 
 log() {
@@ -81,7 +81,7 @@ validate_instance_arg() {
 apply_template() {
   local template="$1"
   log "Applying ${template}"
-  envsubst < "${TEMPLATES_DIR}/${template}" | kubectl apply -f -
+  envsubst < "${K8S_DIR}/${template}" | kubectl apply -f -
 }
 
 print_access_instructions() {

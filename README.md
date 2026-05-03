@@ -17,7 +17,7 @@ with reusable Kubernetes instances:
 
 ```text
 instances/<instance>/values.env
-hostPath /data/minecraft/<instance> -> container /data
+k8s/pv.yaml hostPath /data/minecraft/<instance> -> PVC -> container /data
 k3s LoadBalancer Service UDP <external-port> -> Minecraft pod UDP 19132
 ```
 
@@ -64,13 +64,14 @@ client UDP 19133
 ```text
 setup.sh              Create an instance config
 install.sh            Install or update one instance
+status.sh             Show configured instances and live Kubernetes status
 uninstall.sh          Remove one instance's Kubernetes resources
 import_world.sh       Import server data or one world into an instance
 export_world.sh       Export one instance's /data as a tar.gz file
 export_allowlist.sh   Export /data/allowlist.json from an instance
 import_allowlist.sh   Validate and import /data/allowlist.json into an instance
 backup.sh             Back up all instances to MinIO
-templates/            Kubernetes templates rendered with envsubst
+k8s/                  Kubernetes manifests rendered with envsubst
 instances/            Per-instance values.env files
 ```
 
@@ -121,6 +122,14 @@ It writes:
 instances/<instance>/values.env
 ```
 
+Run `./setup.sh` again with a different instance name to create another server. The script suggests the next unused UDP port starting from `19132` and refuses to reuse a port that already exists in another `instances/*/values.env`.
+
+To see existing instance names later, either list the directories under `instances/` or run:
+
+```bash
+./status.sh
+```
+
 Then install it:
 
 ```bash
@@ -136,11 +145,13 @@ Example:
 
 ## Node Label and Storage
 
-Each instance uses a hostPath PersistentVolume:
+Each instance uses a static `hostPath` PersistentVolume and a matching PersistentVolumeClaim:
 
 ```text
 /data/minecraft/<instance>
 ```
+
+The pod mounts `/data` from PVC `minecraft-<instance>-data`, which is bound to PV `minecraft-<instance>-pv` for that host path.
 
 The pod and PV are pinned to nodes with the selected label key and value `true`.
 
@@ -401,6 +412,14 @@ For the selected instance, the script asks before deleting:
 Deleting the PV removes only the Kubernetes PV object. The script then asks separately whether to delete the hostPath files under `/data/minecraft/<instance>`. Answering yes permanently removes the world files from the storage node by running a temporary cleanup pod pinned to a Minecraft node. The script refuses to delete paths outside `/data/minecraft/*`.
 
 ## Useful Checks
+
+Show configured instances and their live status:
+
+```bash
+./status.sh
+```
+
+This prints the instance name, configured UDP port, namespace, subdomain, data path, deployment readiness, pod phase, Service endpoint, and PVC/PV status for each configured instance.
 
 Show Minecraft resources:
 
