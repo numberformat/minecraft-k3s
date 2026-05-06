@@ -19,19 +19,19 @@ Usage:
   ./import_allowlist.sh <instance-name> <source-json>
 
 Examples:
-  ./import_allowlist.sh test ./allowlist-test.json
-  ./import_allowlist.sh minecraft1 /Users/verma/backups/minecraft1-allowlist.json
+  ./import_allowlist.sh test ./whitelist-test.json
+  ./import_allowlist.sh minecraft1 /Users/verma/backups/minecraft1-whitelist.json
 
-The source file must be a readable .json file containing a Bedrock allowlist array.
+The source file must be a readable .json file containing a Java whitelist array.
 Example:
   [
     {
-      "name": "PlayerName",
-      "ignoresPlayerLimit": false
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "name": "PlayerName"
     }
   ]
 
-The script validates the JSON, scales the instance down, replaces /data/allowlist.json,
+The script validates the JSON, scales the instance down, replaces /data/whitelist.json,
 and restores the previous replica count.
 
 Requires kubectl access to the target cluster. Source ../noami-k3s/profile.sh first if needed.
@@ -73,21 +73,18 @@ validate_source_file() {
     path = ARGV.fetch(0)
     begin
       data = JSON.parse(File.read(path))
-      raise "allowlist must be a JSON array" unless data.is_a?(Array)
+      raise "whitelist must be a JSON array" unless data.is_a?(Array)
       data.each_with_index do |entry, idx|
-        raise "allowlist entry #{idx} must be an object" unless entry.is_a?(Hash)
+        raise "whitelist entry #{idx} must be an object" unless entry.is_a?(Hash)
         has_name = entry.key?("name") && entry["name"].is_a?(String) && !entry["name"].empty?
-        has_xuid = entry.key?("xuid") && entry["xuid"].is_a?(String) && !entry["xuid"].empty?
-        raise "allowlist entry #{idx} must include a non-empty name or xuid" unless has_name || has_xuid
-        if entry.key?("ignoresPlayerLimit") && entry["ignoresPlayerLimit"] != true && entry["ignoresPlayerLimit"] != false
-          raise "allowlist entry #{idx} ignoresPlayerLimit must be true or false"
-        end
+        has_uuid = entry.key?("uuid") && entry["uuid"].is_a?(String) && !entry["uuid"].empty?
+        raise "whitelist entry #{idx} must include non-empty name and uuid fields" unless has_name && has_uuid
       end
     rescue => e
       warn e.message
       exit 1
     end
-  ' "${source_path}" || die "Invalid allowlist JSON: ${source_path}"
+  ' "${source_path}" || die "Invalid whitelist JSON: ${source_path}"
 }
 
 current_replicas() {
@@ -162,7 +159,7 @@ load_instance "${INSTANCE_ARG}"
 SOURCE_PATH="$(absolute_source_path "${SOURCE_ARG}")"
 validate_source_file "${SOURCE_PATH}"
 
-IMPORT_POD="minecraft-${INSTANCE_NAME}-allowlist-$(date +%Y%m%dt%H%M%S)"
+IMPORT_POD="minecraft-${INSTANCE_NAME}-whitelist-$(date +%Y%m%dt%H%M%S)"
 ORIGINAL_REPLICAS="$(current_replicas)"
 trap 'cleanup; restore_replicas' EXIT
 
@@ -179,9 +176,9 @@ kubectl -n "${NAMESPACE}" wait pod -l "app.kubernetes.io/instance=${INSTANCE_NAM
 log "Creating temporary import pod ${IMPORT_POD}"
 create_import_pod
 
-log "Replacing /data/allowlist.json"
-kubectl -n "${NAMESPACE}" exec -i "${IMPORT_POD}" -- sh -lc 'cat > /data/allowlist.json && chmod 664 /data/allowlist.json && chown 1000:100 /data/allowlist.json 2>/dev/null || true' < "${SOURCE_PATH}"
-kubectl -n "${NAMESPACE}" exec "${IMPORT_POD}" -- sh -lc 'ls -l /data/allowlist.json; cat /data/allowlist.json'
+log "Replacing /data/whitelist.json"
+kubectl -n "${NAMESPACE}" exec -i "${IMPORT_POD}" -- sh -lc 'cat > /data/whitelist.json && chmod 664 /data/whitelist.json && chown 1000:100 /data/whitelist.json 2>/dev/null || true' < "${SOURCE_PATH}"
+kubectl -n "${NAMESPACE}" exec "${IMPORT_POD}" -- sh -lc 'ls -l /data/whitelist.json; cat /data/whitelist.json'
 
 cleanup
 trap - EXIT

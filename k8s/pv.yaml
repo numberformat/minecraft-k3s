@@ -3,7 +3,7 @@ kind: PersistentVolume
 metadata:
   name: minecraft-${INSTANCE_NAME}-pv
   labels:
-    app.kubernetes.io/name: minecraft-bedrock
+    app.kubernetes.io/name: minecraft-paper
     app.kubernetes.io/instance: ${INSTANCE_NAME}
 spec:
   capacity:

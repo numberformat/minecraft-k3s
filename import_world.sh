@@ -20,15 +20,15 @@ Usage:
 
 Examples:
   ./import_world.sh test /Users/verma/data/minecraft_server
-  ./import_world.sh test "/Users/verma/data/minecraft_server/worlds/Bedrock level"
+  ./import_world.sh test /Users/verma/data/minecraft_server/world
   ./import_world.sh test /Users/verma/backups/minecraft-test-20260416.tar.gz
 
 Source can be either a directory or a .tar.gz archive. Accepted layouts:
-  1. Full Bedrock server data containing server.properties and worlds/
+  1. Full Java server data containing server.properties and world data
      This replaces the instance PVC /data contents.
 
-  2. A single Bedrock world containing db/, level.dat, and levelname.txt
-     This imports the world into /data/worlds/<source-directory-or-archive-name>.
+  2. A single Java world containing level.dat and region/
+     This imports the world into /data/<configured-level-name>.
 
 For .tar.gz files, the files must be at the archive root, like archives created by export_world.sh.
 
@@ -37,7 +37,6 @@ The script will:
   - scale minecraft-<instance> to 0
   - mount the instance PVC in a temporary pod
   - stream files with tar, without temp archive files
-  - fix Bedrock binary execute permissions when importing a full data directory
   - scale minecraft-<instance> back to 1
 
 Requires kubectl access to the target cluster. Source ../noami-k3s/profile.sh first if needed.
@@ -58,6 +57,7 @@ load_instance() {
   : "${INSTANCE_NAME:?INSTANCE_NAME is required}"
   : "${NAMESPACE:?NAMESPACE is required}"
   : "${DATA_PATH:?DATA_PATH is required}"
+  LEVEL="${LEVEL:-${LEVEL_NAME:-world}}"
 }
 
 real_source_path() {
@@ -101,23 +101,23 @@ validate_archive_source() {
   [[ "${source_path}" == *.tar.gz ]] || die "Archive source must end with .tar.gz: ${source_path}"
   tar -tzf "${source_path}" >/dev/null || die "Archive is not a readable tar.gz file: ${source_path}"
 
-  if archive_has_root_path "${source_path}" server.properties && archive_has_root_path "${source_path}" worlds; then
+  if archive_has_root_path "${source_path}" server.properties; then
     SOURCE_KIND="archive"
     IMPORT_MODE="server-data"
     IMPORT_TARGET="/data"
     return 0
   fi
 
-  if archive_has_root_path "${source_path}" db && archive_has_root_path "${source_path}" level.dat && archive_has_root_path "${source_path}" levelname.txt; then
+  if archive_has_root_path "${source_path}" level.dat && archive_has_root_path "${source_path}" region; then
     SOURCE_KIND="archive"
     IMPORT_MODE="single-world"
     WORLD_NAME="$(archive_basename_without_tar_gz "${source_path}")"
     [[ -n "${WORLD_NAME}" ]] || die "Could not determine world name from archive filename."
-    IMPORT_TARGET="/data/worlds/${WORLD_NAME}"
+    IMPORT_TARGET="/data/${LEVEL}"
     return 0
   fi
 
-  die "Archive does not contain accepted Bedrock data at its root. Run ./import_world.sh with no args for accepted layouts."
+  die "Archive does not contain accepted Java server data at its root. Run ./import_world.sh with no args for accepted layouts."
 }
 
 validate_directory_source() {
@@ -125,23 +125,23 @@ validate_directory_source() {
   [[ -d "${source_path}" ]] || die "Directory source is not a directory: ${source_path}"
   [[ -r "${source_path}" ]] || die "Directory source is not readable: ${source_path}"
 
-  if [[ -f "${source_path}/server.properties" && -d "${source_path}/worlds" ]]; then
+  if [[ -f "${source_path}/server.properties" ]]; then
     SOURCE_KIND="directory"
     IMPORT_MODE="server-data"
     IMPORT_TARGET="/data"
     return 0
   fi
 
-  if [[ -d "${source_path}/db" && -f "${source_path}/level.dat" && -f "${source_path}/levelname.txt" ]]; then
+  if [[ -f "${source_path}/level.dat" && -d "${source_path}/region" ]]; then
     SOURCE_KIND="directory"
     IMPORT_MODE="single-world"
     WORLD_NAME="$(basename "${source_path}")"
     [[ -n "${WORLD_NAME}" && "${WORLD_NAME}" != "." && "${WORLD_NAME}" != "/" ]] || die "Could not determine world directory name."
-    IMPORT_TARGET="/data/worlds/${WORLD_NAME}"
+    IMPORT_TARGET="/data/${LEVEL}"
     return 0
   fi
 
-  die "Directory does not look like Bedrock server data or a single Bedrock world directory. Run ./import_world.sh with no args for accepted layouts."
+  die "Directory does not look like Java server data or a single Java world directory. Run ./import_world.sh with no args for accepted layouts."
 }
 
 validate_source_path() {
@@ -207,8 +207,6 @@ import_server_data() {
     COPYFILE_DISABLE=1 tar --no-xattrs -C "${SOURCE_PATH}" -czf - . | kubectl -n "${NAMESPACE}" exec -i "${IMPORT_POD}" -- tar -C /data -xzf -
   fi
 
-  log "Fixing Bedrock binary execute permissions"
-  kubectl -n "${NAMESPACE}" exec "${IMPORT_POD}" -- sh -lc 'chmod +x /data/bedrock_server* 2>/dev/null || true'
 }
 
 import_single_world() {

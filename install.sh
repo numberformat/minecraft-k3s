@@ -18,6 +18,14 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
 }
 
+to_upper_bool() {
+  case "$1" in
+    true|TRUE) printf 'TRUE' ;;
+    false|FALSE) printf 'FALSE' ;;
+    *) die "Expected boolean true/false value, got: $1" ;;
+  esac
+}
+
 load_instance() {
   local instance="$1"
   local values_file="${INSTANCES_DIR}/${instance}/values.env"
@@ -26,52 +34,57 @@ load_instance() {
   source "${values_file}"
 
   : "${INSTANCE_NAME:?INSTANCE_NAME is required}"
-  : "${PORT:?PORT is required}"
   : "${DATA_PATH:?DATA_PATH is required}"
   : "${NODE_LABEL:?NODE_LABEL is required}"
   : "${STORAGE:?STORAGE is required}"
   : "${NAMESPACE:?NAMESPACE is required}"
 
+  JAVA_PORT="${JAVA_PORT:-25565}"
+  BEDROCK_PORT="${BEDROCK_PORT:-${PORT:-19132}}"
+  TYPE="${TYPE:-PAPER}"
+  VERSION="${VERSION:-1.21.11}"
+  SERVER_NAME="${SERVER_NAME:-${INSTANCE_NAME}}"
+  MODE="${MODE:-${GAMEMODE:-survival}}"
+  DIFFICULTY="${DIFFICULTY:-normal}"
+  LEVEL="${LEVEL:-${LEVEL_NAME:-${INSTANCE_NAME}}}"
+  SEED="${SEED:-${LEVEL_SEED:-}}"
+  LEVEL_TYPE="${LEVEL_TYPE:-default}"
+  MAX_PLAYERS="${MAX_PLAYERS:-10}"
+  PLAYER_IDLE_TIMEOUT="${PLAYER_IDLE_TIMEOUT:-30}"
+  VIEW_DISTANCE="${VIEW_DISTANCE:-10}"
+  SIMULATION_DISTANCE="${SIMULATION_DISTANCE:-${TICK_DISTANCE:-4}}"
+  MEMORY="${MEMORY:-4G}"
+  TYPE="${TYPE^^}"
+  ONLINE_MODE="$(to_upper_bool "${ONLINE_MODE:-false}")"
+  ENABLE_RCON="$(to_upper_bool "${ENABLE_RCON:-true}")"
+  PVP="$(to_upper_bool "${PVP:-true}")"
+  ENABLE_WHITELIST="$(to_upper_bool "${ENABLE_WHITELIST:-${WHITE_LIST:-false}}")"
+
   export INSTANCE_NAME
-  export PORT
+  export JAVA_PORT
+  export BEDROCK_PORT
   export SUBDOMAIN
   export DATA_PATH
   export NODE_LABEL
   export STORAGE
-  SERVER_NAME="${SERVER_NAME:-${INSTANCE_NAME}}"
-  GAMEMODE="${GAMEMODE:-survival}"
-  DIFFICULTY="${DIFFICULTY:-easy}"
-  DEFAULT_PLAYER_PERMISSION_LEVEL="${DEFAULT_PLAYER_PERMISSION_LEVEL:-member}"
-  LEVEL_NAME="${LEVEL_NAME:-${INSTANCE_NAME}}"
-  LEVEL_SEED="${LEVEL_SEED:-}"
-  LEVEL_TYPE="${LEVEL_TYPE:-DEFAULT}"
-  ALLOW_CHEATS="${ALLOW_CHEATS:-false}"
-  MAX_PLAYERS="${MAX_PLAYERS:-10}"
-  PLAYER_IDLE_TIMEOUT="${PLAYER_IDLE_TIMEOUT:-30}"
-  TEXTUREPACK_REQUIRED="${TEXTUREPACK_REQUIRED:-false}"
-  ONLINE_MODE="${ONLINE_MODE:-true}"
-  WHITE_LIST="${WHITE_LIST:-false}"
-  VIEW_DISTANCE="${VIEW_DISTANCE:-10}"
-  TICK_DISTANCE="${TICK_DISTANCE:-4}"
-  MAX_THREADS="${MAX_THREADS:-8}"
-
   export NAMESPACE
+  export TYPE
+  export VERSION
   export SERVER_NAME
-  export GAMEMODE
+  export MODE
   export DIFFICULTY
-  export DEFAULT_PLAYER_PERMISSION_LEVEL
-  export LEVEL_NAME
-  export LEVEL_SEED
+  export LEVEL
+  export SEED
   export LEVEL_TYPE
-  export ALLOW_CHEATS
   export MAX_PLAYERS
   export PLAYER_IDLE_TIMEOUT
-  export TEXTUREPACK_REQUIRED
-  export ONLINE_MODE
-  export WHITE_LIST
   export VIEW_DISTANCE
-  export TICK_DISTANCE
-  export MAX_THREADS
+  export SIMULATION_DISTANCE
+  export MEMORY
+  export ONLINE_MODE
+  export ENABLE_RCON
+  export PVP
+  export ENABLE_WHITELIST
 }
 
 validate_instance_arg() {
@@ -87,13 +100,22 @@ apply_template() {
 print_access_instructions() {
   cat <<EOF
 
-Minecraft Bedrock is exposed directly with a k3s LoadBalancer Service:
+Minecraft Java + Bedrock compatibility is exposed directly with one k3s LoadBalancer Service:
 
-  service/minecraft-${INSTANCE_NAME} UDP ${PORT} -> pod UDP 19132
+  service/minecraft-${INSTANCE_NAME} TCP ${JAVA_PORT} -> pod TCP 25565
+  service/minecraft-${INSTANCE_NAME} UDP ${BEDROCK_PORT} -> pod UDP 19132
 
-Bedrock does not support host or subdomain routing. Use the DNS name only as documentation and connect with the unique port. Your router/firewall must forward this UDP port to a k3s node or stable ServiceLB/VIP address:
+Java clients connect to:
 
-  ${SUBDOMAIN:-<your-hostname>}:${PORT}
+  ${SUBDOMAIN:-<your-hostname>}:${JAVA_PORT}
+
+Bedrock clients connect to:
+
+  ${SUBDOMAIN:-<your-hostname>}:${BEDROCK_PORT}
+
+Java and Bedrock do not share the same protocol:
+- Java Edition talks to Paper on TCP 25565
+- Bedrock Edition talks to Geyser on UDP 19132, which then bridges into Paper
 
 The hostPath directory must exist on a node labeled:
 
@@ -119,6 +141,8 @@ load_instance "$1"
 
 log "Installing ${INSTANCE_NAME} in namespace ${NAMESPACE}"
 log "Persistent data path: ${DATA_PATH}"
+log "Java port: ${JAVA_PORT}/tcp"
+log "Bedrock port: ${BEDROCK_PORT}/udp"
 
 apply_template namespace.yaml
 apply_template pv.yaml
@@ -127,7 +151,7 @@ apply_template deployment.yaml
 apply_template service.yaml
 
 log "Waiting for deployment rollout"
-kubectl -n "${NAMESPACE}" rollout status "deployment/minecraft-${INSTANCE_NAME}" --timeout=180s
+kubectl -n "${NAMESPACE}" rollout status "deployment/minecraft-${INSTANCE_NAME}" --timeout=300s
 
 print_access_instructions
 log "Install complete"

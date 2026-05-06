@@ -19,15 +19,15 @@ Usage:
   ./export_allowlist.sh <instance-name> <output-json>
 
 Examples:
-  ./export_allowlist.sh test ./allowlist-test.json
-  ./export_allowlist.sh minecraft1 /Users/verma/backups/minecraft1-allowlist.json
+  ./export_allowlist.sh test ./whitelist-test.json
+  ./export_allowlist.sh minecraft1 /Users/verma/backups/minecraft1-whitelist.json
 
 The output path must:
   - end with .json
   - have an existing parent directory
   - not already exist
 
-The script reads /data/allowlist.json from the running Minecraft pod.
+The script reads /data/whitelist.json from the running Minecraft pod.
 If the file is missing, it exports an empty JSON array: []
 
 Requires kubectl access to the target cluster. Source ../noami-k3s/profile.sh first if needed.
@@ -88,12 +88,12 @@ if ! kubectl -n "${NAMESPACE}" get deployment "minecraft-${INSTANCE_NAME}" >/dev
   die "Deployment not found: ${NAMESPACE}/minecraft-${INSTANCE_NAME}"
 fi
 
-if ! kubectl -n "${NAMESPACE}" exec "deployment/minecraft-${INSTANCE_NAME}" -- sh -lc 'test -f /data/allowlist.json' >/dev/null 2>&1; then
+if ! kubectl -n "${NAMESPACE}" exec "deployment/minecraft-${INSTANCE_NAME}" -- sh -lc 'test -f /data/whitelist.json' >/dev/null 2>&1; then
   printf '[]\n' > "${OUTPUT_PATH}"
-  log "allowlist.json was missing; wrote empty allowlist."
+  log "whitelist.json was missing; wrote empty whitelist."
 else
-  kubectl -n "${NAMESPACE}" exec "deployment/minecraft-${INSTANCE_NAME}" -- cat /data/allowlist.json > "${OUTPUT_PATH}"
-  log "Exported allowlist."
+  kubectl -n "${NAMESPACE}" exec "deployment/minecraft-${INSTANCE_NAME}" -- cat /data/whitelist.json > "${OUTPUT_PATH}"
+  log "Exported whitelist."
 fi
 
 log "Wrote ${OUTPUT_PATH}"

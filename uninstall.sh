@@ -77,14 +77,20 @@ instance_summary() {
   local instance="$1"
   local values_file="${INSTANCES_DIR}/${instance}/values.env"
   (
+    JAVA_PORT="?"
+    BEDROCK_PORT="?"
     PORT="?"
     NAMESPACE="?"
     SUBDOMAIN=""
     DATA_PATH=""
-    [[ -f "${values_file}" ]] && source "${values_file}"
+    if [[ -f "${values_file}" ]]; then
+      source "${values_file}"
+      JAVA_PORT="${JAVA_PORT:-25565}"
+      BEDROCK_PORT="${BEDROCK_PORT:-${PORT:-19132}}"
+    fi
     state="$(instance_state "${instance}")"
-    printf '%-24s status=%-24s port=%-6s namespace=%-12s subdomain=%s data=%s\n' \
-      "${instance}" "${state}" "${PORT:-?}" "${NAMESPACE:-?}" "${SUBDOMAIN:-}" "${DATA_PATH:-}"
+    printf '%-24s status=%-24s java=%-6s bedrock=%-6s namespace=%-12s subdomain=%s data=%s\n' \
+      "${instance}" "${state}" "${JAVA_PORT:-?}" "${BEDROCK_PORT:-?}" "${NAMESPACE:-?}" "${SUBDOMAIN:-}" "${DATA_PATH:-}"
   )
 }
 
@@ -217,7 +223,7 @@ storage_objects_gone() {
 cleanup_local_config_if_storage_gone() {
   if storage_objects_gone; then
     log "PVC and PV are gone; removing local config so ${INSTANCE_NAME} no longer appears in this menu."
-    delete_local_config
+    #delete_local_config
   else
     log "Storage object remains; keeping local config so ${INSTANCE_NAME} can still be managed."
   fi

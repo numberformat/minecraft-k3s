@@ -4,7 +4,7 @@ metadata:
   name: minecraft-${INSTANCE_NAME}
   namespace: ${NAMESPACE}
   labels:
-    app.kubernetes.io/name: minecraft-bedrock
+    app.kubernetes.io/name: minecraft-paper
     app.kubernetes.io/instance: ${INSTANCE_NAME}
 spec:
   replicas: 1
@@ -12,56 +12,71 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: minecraft-bedrock
+      app.kubernetes.io/name: minecraft-paper
       app.kubernetes.io/instance: ${INSTANCE_NAME}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: minecraft-bedrock
+        app.kubernetes.io/name: minecraft-paper
         app.kubernetes.io/instance: ${INSTANCE_NAME}
     spec:
       nodeSelector:
         "${NODE_LABEL}": "true"
       containers:
         - name: minecraft
-          image: itzg/minecraft-bedrock-server:latest
+          image: itzg/minecraft-server:stable
           imagePullPolicy: IfNotPresent
           env:
             - name: EULA
               value: "TRUE"
+            - name: TYPE
+              value: "${TYPE}"
+            - name: VERSION
+              value: "${VERSION}"
+            - name: MEMORY
+              value: "${MEMORY}"
+            - name: ENABLE_RCON
+              value: "${ENABLE_RCON}"
+            - name: MOTD
+              value: "${SERVER_NAME}"
             - name: SERVER_NAME
               value: "${SERVER_NAME}"
-            - name: GAMEMODE
-              value: "${GAMEMODE}"
+            - name: MODE
+              value: "${MODE}"
             - name: DIFFICULTY
               value: "${DIFFICULTY}"
-            - name: DEFAULT_PLAYER_PERMISSION_LEVEL
-              value: "${DEFAULT_PLAYER_PERMISSION_LEVEL}"
-            - name: LEVEL_NAME
-              value: "${LEVEL_NAME}"
-            - name: LEVEL_SEED
-              value: "${LEVEL_SEED}"
-            - name: LEVEL_TYPE
-              value: "${LEVEL_TYPE}"
-            - name: ALLOW_CHEATS
-              value: "${ALLOW_CHEATS}"
+            - name: LEVEL
+              value: "${LEVEL}"
+            - name: SEED
+              value: "${SEED}"
             - name: MAX_PLAYERS
               value: "${MAX_PLAYERS}"
             - name: PLAYER_IDLE_TIMEOUT
               value: "${PLAYER_IDLE_TIMEOUT}"
-            - name: TEXTUREPACK_REQUIRED
-              value: "${TEXTUREPACK_REQUIRED}"
-            - name: ONLINE_MODE
-              value: "${ONLINE_MODE}"
-            - name: WHITE_LIST
-              value: "${WHITE_LIST}"
             - name: VIEW_DISTANCE
               value: "${VIEW_DISTANCE}"
-            - name: TICK_DISTANCE
-              value: "${TICK_DISTANCE}"
-            - name: MAX_THREADS
-              value: "${MAX_THREADS}"
+            - name: SIMULATION_DISTANCE
+              value: "${SIMULATION_DISTANCE}"
+            # Floodgate relies on the Java server accepting non-Mojang-authenticated
+            # Bedrock identities that Geyser translates into Java sessions.
+            - name: ONLINE_MODE
+              value: "${ONLINE_MODE}"
+            - name: PVP
+              value: "${PVP}"
+            - name: ENABLE_WHITELIST
+              value: "${ENABLE_WHITELIST}"
+            - name: PLUGINS
+              value: |
+                https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot
+                https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot
+                https://hangarcdn.papermc.io/plugins/ViaVersion/ViaVersion/versions/5.9.0/PAPER/ViaVersion-5.9.0.jar
+                https://hangarcdn.papermc.io/plugins/ViaVersion/ViaBackwards/versions/5.9.0/PAPER/ViaBackwards-5.9.0.jar
           ports:
+            - name: java
+              containerPort: 25565
+              protocol: TCP
+            # Geyser listens on UDP 19132 for Bedrock clients even though the actual
+            # Minecraft server is Java/Paper. This port must remain exposed for cross-play.
             - name: bedrock
               containerPort: 19132
               protocol: UDP
@@ -72,9 +87,11 @@ spec:
             exec:
               command:
                 - mc-monitor
-                - status-bedrock
+                - status
                 - --host
                 - 127.0.0.1
+                - --port
+                - "25565"
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 6
@@ -82,9 +99,11 @@ spec:
             exec:
               command:
                 - mc-monitor
-                - status-bedrock
+                - status
                 - --host
                 - 127.0.0.1
+                - --port
+                - "25565"
             initialDelaySeconds: 60
             periodSeconds: 30
             failureThreshold: 4

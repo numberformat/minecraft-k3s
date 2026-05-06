@@ -4,15 +4,21 @@ metadata:
   name: minecraft-${INSTANCE_NAME}
   namespace: ${NAMESPACE}
   labels:
-    app.kubernetes.io/name: minecraft-bedrock
+    app.kubernetes.io/name: minecraft-paper
     app.kubernetes.io/instance: ${INSTANCE_NAME}
 spec:
   type: LoadBalancer
   selector:
-    app.kubernetes.io/name: minecraft-bedrock
+    app.kubernetes.io/name: minecraft-paper
     app.kubernetes.io/instance: ${INSTANCE_NAME}
   ports:
+    # Java Edition clients connect over TCP using the Java service port.
+    - name: java
+      port: ${JAVA_PORT}
+      targetPort: 25565
+      protocol: TCP
+    # Bedrock clients connect through Geyser over UDP 19132.
     - name: bedrock
-      port: ${PORT}
+      port: ${BEDROCK_PORT}
       targetPort: 19132
       protocol: UDP

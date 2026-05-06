@@ -1,0 +1,42 @@
+instanceName: minecraft1
+namespace: apps
+
+storage:
+  nodeLabel: minecraft
+  size: 10Gi
+  hostPath: /data/minecraft/minecraft1
+
+network:
+  serviceName: minecraft-minecraft1
+  subdomain: minecraft1.example.com
+  java:
+    externalPort: 25565
+    containerPort: 25565
+    protocol: TCP
+  bedrock:
+    externalPort: 19132
+    containerPort: 19132
+    protocol: UDP
+
+server:
+  image: itzg/minecraft-server:latest
+  type: PAPER
+  version: 1.21.11
+  eula: "TRUE"
+  memory: 4G
+  enableRcon: "true"
+  onlineMode: "false"
+  difficulty: normal
+  mode: survival
+  pvp: "true"
+  enableWhitelist: "false"
+  motd: Minecraft 1
+  level: minecraft1
+  levelType: default
+  maxPlayers: 10
+  playerIdleTimeout: 30
+  viewDistance: 10
+  simulationDistance: 4
+  plugins:
+    - https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot
+    - https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot

@@ -24,14 +24,16 @@ load_instance() {
   local values_file="${INSTANCES_DIR}/${instance}/values.env"
   [[ -f "${values_file}" ]] || return 1
 
-  unset INSTANCE_NAME PORT SUBDOMAIN NODE_LABEL STORAGE DATA_PATH NAMESPACE SERVER_NAME
+  unset INSTANCE_NAME JAVA_PORT BEDROCK_PORT PORT SUBDOMAIN NODE_LABEL STORAGE DATA_PATH NAMESPACE SERVER_NAME
   # shellcheck disable=SC1090
   source "${values_file}"
 
   : "${INSTANCE_NAME:?INSTANCE_NAME is required}"
-  : "${PORT:?PORT is required}"
   : "${DATA_PATH:?DATA_PATH is required}"
   : "${NAMESPACE:?NAMESPACE is required}"
+
+  JAVA_PORT="${JAVA_PORT:-25565}"
+  BEDROCK_PORT="${BEDROCK_PORT:-${PORT:-19132}}"
 }
 
 kubectl_ok() {
@@ -77,9 +79,9 @@ pod_summary() {
     2>/dev/null
 }
 
-service_endpoint() {
+service_ports() {
   kubectl -n "${NAMESPACE}" get service "minecraft-${INSTANCE_NAME}" \
-    -o jsonpath='{.spec.type}{" "}{.spec.ports[0].protocol}{":"}{.spec.ports[0].port}{" external="}{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}' \
+    -o jsonpath='{range .spec.ports[*]}{.name}{"="}{.protocol}{":"}{.port}{"->"}{.targetPort}{" "}{end}{"external="}{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}' \
     2>/dev/null
 }
 
@@ -107,7 +109,8 @@ print_instance() {
   printf '%s\n' "Instance: ${INSTANCE_NAME}"
   printf '%s\n' "  namespace: ${NAMESPACE}"
   printf '%s\n' "  server name: ${SERVER_NAME:-${INSTANCE_NAME}}"
-  printf '%s\n' "  port: ${PORT}/udp"
+  printf '%s\n' "  java port: ${JAVA_PORT}/tcp"
+  printf '%s\n' "  bedrock port: ${BEDROCK_PORT}/udp"
   printf '%s\n' "  subdomain: ${SUBDOMAIN:-<unset>}"
   printf '%s\n' "  node label: ${NODE_LABEL:-<unset>}=true"
   printf '%s\n' "  data path: ${DATA_PATH}"
@@ -127,7 +130,7 @@ print_instance() {
   fi
 
   if service_exists; then
-    printf '%s\n' "  service: $(service_endpoint)"
+    printf '%s\n' "  service: $(service_ports)"
   else
     printf '  service: missing\n'
   fi
