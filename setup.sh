@@ -2,7 +2,8 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTANCES_DIR="${ROOT_DIR}/instances"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/lib/clusters.sh"
 DEFAULT_JAVA_PORT=25565
 DEFAULT_BEDROCK_PORT=19132
 DEFAULT_NODE_LABEL="minecraft"
@@ -30,6 +31,31 @@ die() {
   printf '[setup] ERROR: %s\n' "$*" >&2
   exit 1
 }
+
+CLUSTER_NAME=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cluster)
+      [[ $# -ge 2 ]] || die "--cluster requires a value"
+      CLUSTER_NAME="$2"
+      shift 2
+      ;;
+    *)
+      die "Unknown argument: $1"
+      ;;
+  esac
+done
+
+if [[ -z "${CLUSTER_NAME}" ]]; then
+  CLUSTER_NAME="$(resolved_cluster_from_context || true)"
+fi
+if [[ -n "${CLUSTER_NAME}" ]]; then
+  cluster_name_is_valid "${CLUSTER_NAME}" || die "Invalid cluster name: ${CLUSTER_NAME}"
+  ensure_cluster_instances_dir "${CLUSTER_NAME}"
+  INSTANCES_DIR="$(cluster_instances_dir "${CLUSTER_NAME}")"
+else
+  INSTANCES_DIR="${ROOT_DIR}/instances"
+fi
 
 validate_instance_name() {
   local name="$1"
@@ -266,6 +292,13 @@ mkdir -p "${INSTANCE_DIR}"
 write_values_env "${INSTANCE_DIR}/values.env"
 
 log "Created ${INSTANCE_DIR}/values.env"
+if [[ -n "${CLUSTER_NAME}" ]]; then
+  log "Cluster: ${CLUSTER_NAME}"
+fi
 log "Java clients connect on TCP ${JAVA_PORT}; Bedrock clients connect on UDP ${BEDROCK_PORT}."
 log "Bedrock compatibility is provided by Geyser and Floodgate on top of the Paper server."
-printf '\nRun ./install.sh %s\n' "${INSTANCE_NAME}"
+if [[ -n "${CLUSTER_NAME}" ]]; then
+  printf '\nRun ./install.sh --cluster %s %s\n' "${CLUSTER_NAME}" "${INSTANCE_NAME}"
+else
+  printf '\nRun ./install.sh %s\n' "${INSTANCE_NAME}"
+fi

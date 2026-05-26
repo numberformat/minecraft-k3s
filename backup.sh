@@ -2,7 +2,8 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTANCES_DIR="${ROOT_DIR}/instances"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/lib/clusters.sh"
 
 log() {
   printf '[backup] %s\n' "$*"
@@ -157,6 +158,37 @@ JSON
   kubectl -n "${NAMESPACE}" rollout status deployment "minecraft-${INSTANCE_NAME}" --timeout=180s
 }
 
+CLUSTER_NAME=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cluster)
+      [[ $# -ge 2 ]] || die "--cluster requires a value"
+      CLUSTER_NAME="$2"
+      shift 2
+      ;;
+    *)
+      die "Unknown argument: $1"
+      ;;
+  esac
+done
+
+if [[ -z "${CLUSTER_NAME}" ]]; then
+  CLUSTER_NAME="$(resolved_cluster_from_context || true)"
+fi
+if [[ -n "${CLUSTER_NAME}" ]]; then
+  cluster_name_is_valid "${CLUSTER_NAME}" || die "Invalid cluster name: ${CLUSTER_NAME}"
+  INSTANCES_DIR="$(instances_dir_for_cluster "${CLUSTER_NAME}")"
+  KUBECONFIG_PATH="${KUBECONFIG_PATH:-$(cluster_kubeconfig_file "${CLUSTER_NAME}")}"
+else
+  INSTANCES_DIR="${ROOT_DIR}/instances"
+  KUBECONFIG_PATH="${KUBECONFIG_PATH:-}"
+fi
+
+KUBECONFIG_PATH="$(resolve_kubeconfig_path "${KUBECONFIG_PATH}")"
+if [[ -n "${KUBECONFIG_PATH}" ]]; then
+  export KUBECONFIG="${KUBECONFIG:-${KUBECONFIG_PATH}}"
+fi
+
 require_cmd kubectl
 require_env MINIO_ENDPOINT
 require_env MINIO_ACCESS_KEY
@@ -173,4 +205,7 @@ for instance in "${instances[@]}"; do
   backup_instance "${instance}"
 done
 
+if [[ -n "${CLUSTER_NAME}" ]]; then
+  log "Cluster: ${CLUSTER_NAME}"
+fi
 log "All backups complete"

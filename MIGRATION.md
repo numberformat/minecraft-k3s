@@ -2,6 +2,11 @@
 
 This project now deploys Java Edition `itzg/minecraft-server:latest` with `TYPE=PAPER` and Bedrock compatibility via Geyser and Floodgate.
 
+It is also now cluster-aware:
+
+- active instance configs live under `clusters/<cluster>/instances/`
+- the old top-level `instances/` directory is treated as a legacy fallback
+
 ## What changed
 
 - The runtime image changed from `itzg/minecraft-bedrock-server:latest` to `itzg/minecraft-server:latest`.

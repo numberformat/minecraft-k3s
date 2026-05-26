@@ -2,8 +2,9 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/lib/clusters.sh"
 K8S_DIR="${ROOT_DIR}/k8s"
-INSTANCES_DIR="${ROOT_DIR}/instances"
 
 log() {
   printf '[install] %s\n' "$*"
@@ -88,7 +89,7 @@ load_instance() {
 }
 
 validate_instance_arg() {
-  [[ $# -eq 1 ]] || die "Usage: ./install.sh <instance-name>"
+  [[ $# -eq 1 ]] || die "Usage: ./install.sh [--cluster <name>] <instance-name>"
 }
 
 apply_template() {
@@ -133,6 +134,44 @@ Label the storage node if needed:
 EOF
 }
 
+CLUSTER_NAME=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cluster)
+      [[ $# -ge 2 ]] || die "--cluster requires a value"
+      CLUSTER_NAME="$2"
+      shift 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      die "Unknown argument: $1"
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ -z "${CLUSTER_NAME}" ]]; then
+  CLUSTER_NAME="$(resolved_cluster_from_context || true)"
+fi
+if [[ -n "${CLUSTER_NAME}" ]]; then
+  cluster_name_is_valid "${CLUSTER_NAME}" || die "Invalid cluster name: ${CLUSTER_NAME}"
+  INSTANCES_DIR="$(instances_dir_for_cluster "${CLUSTER_NAME}")"
+  KUBECONFIG_PATH="${KUBECONFIG_PATH:-$(cluster_kubeconfig_file "${CLUSTER_NAME}")}"
+else
+  INSTANCES_DIR="${ROOT_DIR}/instances"
+  KUBECONFIG_PATH="${KUBECONFIG_PATH:-}"
+fi
+
+KUBECONFIG_PATH="$(resolve_kubeconfig_path "${KUBECONFIG_PATH}")"
+if [[ -n "${KUBECONFIG_PATH}" ]]; then
+  export KUBECONFIG="${KUBECONFIG:-${KUBECONFIG_PATH}}"
+fi
+
 validate_instance_arg "$@"
 require_cmd kubectl
 require_cmd envsubst
@@ -140,6 +179,9 @@ require_cmd envsubst
 load_instance "$1"
 
 log "Installing ${INSTANCE_NAME} in namespace ${NAMESPACE}"
+if [[ -n "${CLUSTER_NAME}" ]]; then
+  log "Cluster: ${CLUSTER_NAME}"
+fi
 log "Persistent data path: ${DATA_PATH}"
 log "Java port: ${JAVA_PORT}/tcp"
 log "Bedrock port: ${BEDROCK_PORT}/udp"

@@ -2,7 +2,8 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTANCES_DIR="${ROOT_DIR}/instances"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/lib/clusters.sh"
 
 log() {
   printf '[export-allowlist] %s\n' "$*"
@@ -16,7 +17,7 @@ die() {
 usage() {
   cat <<EOF
 Usage:
-  ./export_allowlist.sh <instance-name> <output-json>
+  ./export_allowlist.sh [--cluster <name>] <instance-name> <output-json>
 
 Examples:
   ./export_allowlist.sh test ./whitelist-test.json
@@ -65,6 +66,37 @@ validate_output_path() {
   [[ -w "$(dirname "${output_path}")" ]] || die "Output parent directory is not writable: $(dirname "${output_path}")"
 }
 
+CLUSTER_NAME=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cluster)
+      [[ $# -ge 2 ]] || die "--cluster requires a value"
+      CLUSTER_NAME="$2"
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ -z "${CLUSTER_NAME}" ]]; then
+  CLUSTER_NAME="$(resolved_cluster_from_context || true)"
+fi
+if [[ -n "${CLUSTER_NAME}" ]]; then
+  cluster_name_is_valid "${CLUSTER_NAME}" || die "Invalid cluster name: ${CLUSTER_NAME}"
+  INSTANCES_DIR="$(instances_dir_for_cluster "${CLUSTER_NAME}")"
+  KUBECONFIG_PATH="${KUBECONFIG_PATH:-$(cluster_kubeconfig_file "${CLUSTER_NAME}")}"
+else
+  INSTANCES_DIR="${ROOT_DIR}/instances"
+  KUBECONFIG_PATH="${KUBECONFIG_PATH:-}"
+fi
+
+KUBECONFIG_PATH="$(resolve_kubeconfig_path "${KUBECONFIG_PATH}")"
+if [[ -n "${KUBECONFIG_PATH}" ]]; then
+  export KUBECONFIG="${KUBECONFIG:-${KUBECONFIG_PATH}}"
+fi
+
 if [[ $# -eq 0 ]]; then
   usage
   exit 0
@@ -81,6 +113,9 @@ OUTPUT_PATH="$(absolute_output_path "${OUTPUT_ARG}")"
 validate_output_path "${OUTPUT_PATH}"
 
 log "Instance: ${INSTANCE_NAME}"
+if [[ -n "${CLUSTER_NAME}" ]]; then
+  log "Cluster: ${CLUSTER_NAME}"
+fi
 log "Namespace: ${NAMESPACE}"
 log "Output: ${OUTPUT_PATH}"
 

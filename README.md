@@ -1,6 +1,7 @@
 # Minecraft Java + Bedrock on k3s
 
-This project deploys Minecraft Java Edition servers on k3s using `itzg/minecraft-server:latest` with:
+This project deploys Minecraft Java Edition servers on k3s using
+`itzg/minecraft-server:latest` with:
 
 - `TYPE=PAPER`
 - `VERSION=1.21.11`
@@ -13,8 +14,10 @@ The Kubernetes structure stays the same as the earlier Bedrock-only version:
 
 - namespace-local Deployment and Service
 - per-instance static PV/PVC
-- per-instance values file under `instances/`
+- per-instance values file under `clusters/<cluster>/instances/`
 - idempotent `install.sh` driven by `envsubst`
+
+This repo is already plain Kubernetes manifests. It does not use Helm.
 
 ## Files
 
@@ -28,11 +31,28 @@ export_world.sh               Export one instance's /data as a tar.gz file
 export_allowlist.sh           Export /data/whitelist.json from an instance
 import_allowlist.sh           Import /data/whitelist.json into an instance
 backup.sh                     Back up all instances to MinIO
+lib/clusters.sh               Resolve current cluster from ../noami-k3s
 k8s/                          Kubernetes manifests rendered with envsubst
-instances/                    Per-instance values.env files
+clusters/<cluster>/instances/ Per-instance values.env files
+instances/                    Legacy single-cluster fallback
 examples/values.yaml
 MIGRATION.md
 ```
+
+## Multi-Cluster Usage
+
+The repo now follows the same cluster-aware pattern as the rest of the stack.
+
+Examples:
+
+```bash
+./setup.sh --cluster homelab
+./install.sh --cluster homelab minecraft3
+./status.sh --cluster homelab
+```
+
+If `--cluster` is omitted, the scripts try to resolve the current cluster from
+`../noami-k3s/.current-cluster`.
 
 ## What Gets Deployed
 
@@ -77,7 +97,8 @@ Cluster requirements:
 - at least one node labeled for Minecraft, default label `minecraft=true`
 - router or firewall rules for Java TCP and Bedrock UDP if clients connect from outside the LAN
 
-Load kubeconfig before running cluster commands:
+The scripts can resolve the kubeconfig automatically from `noami-k3s`, but
+manual `kubectl` work still benefits from:
 
 ```bash
 source ../noami-k3s/profile.sh
@@ -89,13 +110,13 @@ kubectl get nodes
 Run:
 
 ```bash
-./setup.sh
+./setup.sh --cluster homelab
 ```
 
 The script writes:
 
 ```text
-instances/<instance>/values.env
+clusters/<cluster>/instances/<instance>/values.env
 ```
 
 New configs now include both external ports:
@@ -130,14 +151,14 @@ To see configured instance names and ports later:
 Run:
 
 ```bash
-./install.sh <instance>
+./install.sh --cluster homelab <instance>
 ```
 
 Example:
 
 ```bash
-./setup.sh
-./install.sh minecraft1
+./setup.sh --cluster homelab
+./install.sh --cluster homelab minecraft1
 ```
 
 The Service exposes both protocols:
@@ -186,7 +207,7 @@ sudo chown -R 1000:1000 /data/minecraft/<instance>
 Show configured instances and their live status:
 
 ```bash
-./status.sh
+./status.sh --cluster homelab
 ```
 
 This prints:
@@ -202,10 +223,11 @@ This prints:
 
 ## World Import and Export
 
-`export_world.sh` exports one instance's full `/data` directory to a local `.tar.gz` file:
+`export_world.sh` exports one instance's full `/data` directory to a local
+`.tar.gz` file:
 
 ```bash
-./export_world.sh <instance> <output-tar.gz>
+./export_world.sh --cluster homelab <instance> <output-tar.gz>
 ```
 
 `import_world.sh` imports either:
@@ -214,7 +236,7 @@ This prints:
 - a single world into `/data/worlds/<name>`
 
 ```bash
-./import_world.sh <instance> <source-path-or-tar.gz>
+./import_world.sh --cluster homelab <instance> <source-path-or-tar.gz>
 ```
 
 Both scripts are multi-instance aware and target the instance name from `instances/<instance>/values.env`.
@@ -224,13 +246,13 @@ Both scripts are multi-instance aware and target the instance name from `instanc
 Export the current Java whitelist:
 
 ```bash
-./export_allowlist.sh <instance> <output-json>
+./export_allowlist.sh --cluster homelab <instance> <output-json>
 ```
 
 Import a whitelist file back into the instance:
 
 ```bash
-./import_allowlist.sh <instance> <source-json>
+./import_allowlist.sh --cluster homelab <instance> <source-json>
 ```
 
 The helper script names are unchanged for compatibility, but they now operate on `/data/whitelist.json`.
@@ -244,15 +266,45 @@ export MINIO_ENDPOINT=https://minio.example.com
 export MINIO_ACCESS_KEY=...
 export MINIO_SECRET_KEY=...
 export MINIO_BUCKET=minecraft-backups
-./backup.sh
+./backup.sh --cluster homelab
 ```
+
+## Backup Boundary
+
+Minecraft is a stateful app.
+
+The durable app state is the full `/data` directory for each instance. That
+includes:
+
+- world data
+- `server.properties`
+- plugins and plugin configs
+- whitelist and player data
+- generated Paper/Geyser/Floodgate state
+
+That means the app-scoped backup boundary is simple:
+
+- back up the full `/data` directory per instance
+- restore the full `/data` directory per instance
+
+The existing repo already does that in two ways:
+
+- `export_world.sh` and `import_world.sh` for local tarball export/import
+- `backup.sh` for MinIO-backed per-instance archive export
+
+Because the server uses a hostPath PV under `/data/minecraft/<instance>`, you may
+also choose to rely on host-level backups of that directory. If you do, be clear
+which mechanism is authoritative:
+
+- host-level backup of `/data/minecraft/<instance>`
+- or app-level MinIO/tarball export from this repo
 
 ## Uninstall
 
 Run:
 
 ```bash
-./uninstall.sh
+./uninstall.sh --cluster homelab
 ```
 
 The script asks separately before deleting:
